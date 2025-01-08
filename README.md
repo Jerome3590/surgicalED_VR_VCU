@@ -27,13 +27,10 @@ Below is initial exploratory data analysis for a to be determined final solution
 
 ## Project Structure
 .  
-├── eda/  
-│   
-├── cluster_analysis/  
-│   
-├── optimal_path/
-│   
-└── data_viz/  
+├── eda/  (exploratory data analysis scripts)
+├── cluster_analysis/  (cluster analysis scripts)
+├── optimal_path/  (optimal path scripts)
+└── data_viz/  (various data visualizations)
 
 
 ## Time Series Clustering Analysis
