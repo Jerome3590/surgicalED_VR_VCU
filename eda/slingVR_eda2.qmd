@@ -1,0 +1,163 @@
+---
+title: "SlingVR Dataset"
+format:
+  html:
+    html-math-method: katex
+    df-print: paged
+    embed-resources: true
+    fontsize: "11pt"
+    smooth-scroll: true
+editor_options: 
+  chunk_output_type: inline
+execute:
+  echo: false
+  message: false
+  warning: false
+  eval: true
+---
+
+```{r}
+
+library(here)
+library(dplyr)
+library(readr)
+library(jsonlite)
+library(plotly)
+library(stringr)
+library(digest)
+
+```
+
+### Assessment IDs
+
+-   Assign users an ID based on sequence \# and file size (include time/date on client app)
+-   Assign experts an ID based on name, sequence #, and file size (include time/date on client app)
+    -   Expert names:\
+        alix k: expert1\
+        d biller: expert2\
+        david ginsburg: expert3\
+        emily d: expert4\
+        gebhart: expert5\
+        jo hill: expert6\
+        k propst: expert7\
+        kris strohbehn: expert8\
+        lisa c: expert9\
+        tanaz: expert10\
+        siff: expert11
+-   Otherwise novice with number based on hash of name
+    -   jay b: novice
+    -    john nealon
+
+<br>
+
+
+```{r}
+
+# Load the digest package
+library(digest)
+
+# Function to extract the first character from each string and concatenate with '.'
+extract_first_character <- function(string) {
+  first_character <- strsplit(string, "")[[1]][1]
+  return(first_character)
+}
+
+# Function to generate a concatenated string of four numeric values from a string
+generate_userid <- function(my_string) {
+  # Generate hash (hexadecimal representation)
+  hash_hex <- digest(my_string, algo = "sha256")
+  
+  # Convert hash to raw bytes
+  hash_raw <- charToRaw(hash_hex)
+  
+  # Extract the first part of the hash and convert to an integer
+  numeric_values <- lapply(1:4, function(i) {
+    start_index <- (i - 1) * 16 + 1
+    end_index <- i * 16
+    sum(as.numeric(hash_raw[start_index:end_index]) * 256^(15:0))
+  })
+  
+  first_values <- sapply(concatenated_values, function(x) x[1])
+  
+  string_values <- as.character(first_values)
+  
+  string_first_elements <- sapply(string_values, extract_first_character)
+  
+  final_hash <- paste(string_first_elements, collapse = "")
+
+  
+  return(final_hash)
+}
+
+# Test the function with a sample string
+my_name <- "Jerome Dixon"
+user_id <- generate_userid(my_string)
+
+print(user_id)
+
+```
+
+### Sitting vs Standing
+
+-   We will add a category to each file so we can compare all together in one dataset
+
+
+
+```{r}
+
+# List files in the directory 
+file_names <- list.files(path = here('seated'), full.names = TRUE)
+
+# Initialize an empty dataframe for combined data
+combined_df <- data.frame()
+
+# Process each file individually
+for (file_id in seq_along(file_names)) {
+    # Read file
+    temp_df <- read_csv(file_names[file_id])
+    
+    # Extract file size
+    file_size <- file.info(file_names[file_id])$size
+    
+    # Extract sequence number and name from file names
+    matches <- str_extract_all(basename(file_names[file_id]), "\\d+|[a-zA-Z_]+\\b")[[1]]
+    sequence_number <- ifelse(is.na(as.numeric(matches[1])), NA, as.numeric(matches[1]))
+    name <- ifelse(!is.na(as.numeric(matches[1])), NA, matches[1])
+
+    # Create Assessment_ID
+    Assessment_ID <- ifelse(!is.na(name),
+                            paste("expert", gsub("_", " ", name), ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"),
+                            paste("novice", ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"))
+    
+    # Add file info to the dataframe
+    temp_df$file_id <- file_id
+    temp_df$sequence_number <- sequence_number
+    temp_df$name <- name
+    temp_df$file_size <- file_size
+    temp_df$Assessment_ID <- Assessment_ID
+
+    # Bind to the main dataframe
+    combined_df <- rbind(combined_df, temp_df)
+}
+
+training_df <- combined_df %>% 
+  select(28,1:23) %>% 
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit)
+
+
+```
+
+
+
+
+::: panel-tabset
+## Stylus Data
+
+[Stylus 3D Location Data](https://plotly-demo.s3.amazonaws.com/slingVR_eda_stylus.html)
+
+<br>
+
+## Head Position Data
+
+[Head Position 3D Location Data](https://plotly-demo.s3.amazonaws.com/slingVR_eda_head_position.html)
+:::

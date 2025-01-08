@@ -1,0 +1,321 @@
+---
+title: "Novice: Trochar Motion Analysis"
+execute: 
+  eval: true
+format: 
+  html: 
+    link-external-icon: true
+    link-external-newwindow: true
+    toc: true
+    toc-depth: 5
+    code-fold: true
+    code-summary: "Show the code"
+    embed-resources: true
+    default-image-extension: svg
+    dpi: 600
+    theme: superhero
+---
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+
+library(here)
+library(dplyr)
+library(readr)
+library(DT)
+library(purrr)
+library(tidyr)
+library(jsonlite)
+library(here)
+library(stringr)
+library(ggplot2)
+library(plotly)
+library(reticulate)
+library(aws.signature)
+library(aws.ec2metadata)
+library(reticulate)
+
+```
+
+### Python Environment
+
+```{python cache=TRUE}
+
+import pkg_resources
+installed_packages = [(d.project_name, d.version) for d in pkg_resources.working_set]
+
+print(installed_packages)
+
+```
+### Load Data
+
+#### When in local environment
+
+```{r eval=FALSE}
+
+vr_sling_ds <- read_csv(here("data","vr_sling_ds.csv"))
+
+```
+
+```{r}
+
+novice_data <- vr_sling_ds %>%
+  filter(str_detect(Assessment_ID, "novice")) 
+
+novice_data %>% 
+  str()
+
+```
+
+```{r}
+
+novice_trochar <- novice_data %>% 
+  select(1,2,3,4,5)
+
+experts$Assessment_ID <- as.factor(experts$Assessment_ID)
+
+```
+
+### Y Axis
+
+```{r}
+
+p1 <- ggplot(novice_trochar, aes(x = TimeStamp, y = StylusPositionY, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position Y") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+# Convert the ggplot object to a Plotly object, setting tooltips to show x, y, and color values
+p1_interactive <- ggplotly(p1, tooltip = c("x", "y", "color"))
+
+# Update the text attribute for the interactive plot to include formatted timestamps and Y positions
+p1_interactive$data[[1]]$text <- paste("Timestamp:", experts$TimeStamp, "<br>Y Position:", experts$StylusPositionY)
+
+# Display the interactive plot
+p1_interactive
+
+
+```
+
+### X Axis
+
+```{r}
+
+p2 <- ggplot(novice_trochar, aes(x = TimeStamp, y = StylusPositionX, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position X") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+# Convert the ggplot object to a Plotly object, setting tooltips to show x, y, and color values
+p2_interactive <- ggplotly(p2, tooltip = c("x", "y", "color"))
+
+# Update the text attribute for the interactive plot to include formatted timestamps and Y positions
+p2_interactive$data[[1]]$text <- paste("Timestamp:", experts$TimeStamp, "<br>X Position:", experts$StylusPositionX)
+
+# Display the interactive plot
+p2_interactive
+
+
+```
+
+### Z Axis
+
+```{r}
+
+# Plotting
+p3 <- ggplot(novice_trochar, aes(x = TimeStamp, y = StylusPositionZ, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position Z") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+# Convert the ggplot object to a plotly object
+p3_interactive <- ggplotly(p3, tooltip = c("x", "y", "color")) # Use 'text' aesthetic for the tooltip
+
+# Update the text attribute for the interactive plot to include formatted timestamps and Y positions
+p3_interactive$data[[1]]$text <- paste("Timestamp:", experts$TimeStamp, "<br>Z Position:", experts$StylusPositionZ)
+
+# Display the interactive plot
+p3_interactive
+
+```
+
+
+### Dynamic Time Warping (DTW) Calculations
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+
+# Pivot the data
+df_pivoted <- novice_trochar %>%
+  group_by(Assessment_ID) %>%
+  summarise(posX_list = list(StylusPositionX),
+            posY_list = list(StylusPositionY),
+            posZ_list = list(StylusPositionZ))
+
+```
+
+```{python}
+
+# Bring R dataframe python env
+df_pivoted = r.df_pivoted
+
+```
+
+```{python}
+
+import pandas as pd
+import numpy as np
+from dtaidistance import dtw_ndim
+
+def calculate_dtw_distance_xyz(df_pivoted):
+    num_rows = len(df_pivoted)
+    
+    assessment_ids = df_pivoted['Assessment_ID'].values
+    num_assessments = len(assessment_ids)
+    
+    # Initialize the DTW distance matrix with zeros
+    dtw_distance_matrix_xyz = pd.DataFrame(np.zeros((num_assessments, num_assessments)),
+                                           index=assessment_ids, columns=assessment_ids)
+    
+    for i in range(0, num_rows - 1):
+        for j in range(i + 1, num_rows):
+            # Extract position lists for pairs of assessments
+            s1_x, s2_x = df_pivoted['posX_list'].iloc[i], df_pivoted['posX_list'].iloc[j]
+            s1_y, s2_y = df_pivoted['posY_list'].iloc[i], df_pivoted['posY_list'].iloc[j]
+            s1_z, s2_z = df_pivoted['posZ_list'].iloc[i], df_pivoted['posZ_list'].iloc[j]
+            
+            # Combine X, Y, and Z into multidimensional arrays
+            series_xyz1 = np.column_stack((s1_x, s1_y, s1_z)).astype(np.double)
+            series_xyz2 = np.column_stack((s2_x, s2_y, s2_z)).astype(np.double)
+
+            # Calculate DTW distance using the ndim method suitable for multidimensional series
+            distance = dtw_ndim.distance(series_xyz1, series_xyz2, use_c=True)
+            
+            # Update the matrix with the DTW distance
+            dtw_distance_matrix_xyz.iloc[i, j] = dtw_distance_matrix_xyz.iloc[j, i] = distance
+
+            print(f"DTW distance between {i} and {j} for XYZ: {distance}")
+    
+    return dtw_distance_matrix_xyz
+
+
+```
+
+
+```{python}
+
+import pandas as pd
+import numpy as np
+
+distance_matrix_novice_trochar = calculate_dtw_distance_xyz(df_pivoted)
+
+```
+
+
+### Save XYZ Distance Matrix to AWS S3
+
+```{python eval=FALSE, cache=TRUE}
+
+import pandas as pd
+import boto3
+
+
+session = boto3.Session(
+    profile_name='pgx'
+)
+
+# Initialize a boto3 client
+s3_client = session.client('s3')
+
+# Convert to parquet
+distance_matrix_novice_trochar.to_parquet('distance_matrix_novice_trochar.parquet')
+
+# Upload the file
+s3_client.upload_file('distance_matrix_novice_trochar.parquet', 'vr-sling', 'distance_matrix/XYZ/distance_matrix_novice_trochar.parquet')
+
+
+```
+
+
+```{python cache=TRUE}
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def plot_dtw_distance_matrix(dtw_distance_matrix, save_path):
+    # Transform index and columns to keep only the last four characters
+    dtw_distance_matrix.index = dtw_distance_matrix.index.map(lambda x: x[-4:])
+    dtw_distance_matrix.columns = dtw_distance_matrix.columns.map(lambda x: x[-4:])
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(dtw_distance_matrix, annot=True, fmt=".1f", cmap='coolwarm', square=True, cbar_kws={'shrink': .5}, annot_kws={'size': 5, 'fontstyle': 'italic'})
+    plt.title('DTW Distance Matrix Heatmap', fontsize=10)
+    plt.xlabel('Assessment ID', fontsize=8)
+    plt.ylabel('Assessment ID', fontsize=8)
+    plt.xticks(fontsize=5)
+    plt.yticks(fontsize=5)
+    plt.show()
+    
+    plt.savefig(save_path, dpi=1200)  # Save the figure at 1200 dpi
+    plt.close()  
+
+
+```
+
+### XYZ Heat Map
+
+```{python cache=TRUE}
+
+plot_dtw_distance_matrix(distance_matrix_novice_trochar, 'dtw_novice_trochar_heatmap.png')
+
+```
+
+```{r}
+
+write_csv(novice_trochar, "novice_trochar_ts.csv")
+
+```
+
+```{python}
+
+import numpy as np
+from scipy.spatial.distance import squareform
+
+# Convert the DataFrame distance matrix to a condensed distance matrix
+distance_array = squareform(distance_matrix_novice_trochar.values, checks=False)
+
+# Perform hierarchical clustering using the condensed distance matrix
+from scipy.cluster.hierarchy import linkage, dendrogram
+import matplotlib.pyplot as plt
+
+Z = linkage(distance_array, method='ward')
+
+# Plot the dendrogram
+plt.figure(figsize=(12, 8))
+dendrogram(Z)
+plt.title('Hierarchical Clustering: Novice Trochar')
+plt.xlabel('Index of Time Series')
+plt.ylabel('Distance')
+
+# Save the plot as an image file
+plt.savefig('hierarchical_clustering_novice_trochar.png', dpi=400)
+
+plt.show()
+
+
+```
+

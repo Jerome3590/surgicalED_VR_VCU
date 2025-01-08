@@ -1,0 +1,309 @@
+---
+title: "SlingVR Dataset"
+format:
+  html:
+    html-math-method: katex
+    df-print: paged
+    embed-resources: true
+    fontsize: "11pt"
+    smooth-scroll: true
+editor_options: 
+  chunk_output_type: inline
+execute:
+  echo: false
+  message: false
+  warning: false
+  eval: true
+---
+
+```{r}
+
+library(here)
+library(dplyr)
+library(readr)
+library(jsonlite)
+library(plotly)
+library(stringr)
+library(digest)
+
+```
+
+### Assessment IDs
+
+-   Assign users an ID based on sequence \# and file size (include time/date on client app)
+-   Assign experts an ID based on name, sequence #, and file size (include time/date on client app)
+    -   Expert names:\
+        alix k: expert1\
+        d biller: expert2\
+        david ginsburg: expert3\
+        emily d: expert4\
+        gebhart: expert5\
+        jo hill: expert6\
+        k propst: expert7\
+        kris strohbehn: expert8\
+        lisa c: expert9\
+        tanaz: expert10\
+        siff: expert11
+-   Otherwise novice with number based on hash of name
+    -   jay b: novice
+    -    john nealon
+
+<br>
+
+
+```{r}
+
+# Load the digest package
+library(digest)
+
+# Function to extract the first character from each string and concatenate with '.'
+extract_first_character <- function(string) {
+  first_character <- strsplit(string, "")[[1]][1]
+  return(first_character)
+}
+
+# Function to generate a concatenated string of four numeric values from a string
+generate_userid_hash <- function(my_string) {
+  # Generate hash (hexadecimal representation)
+  hash_hex <- digest(my_string, algo = "sha256")
+  
+  # Convert hash to raw bytes
+  hash_raw <- charToRaw(hash_hex)
+  
+  # Extract the first part of the hash and convert to an integer
+  numeric_values <- lapply(1:4, function(i) {
+    start_index <- (i - 1) * 16 + 1
+    end_index <- i * 16
+    sum(as.numeric(hash_raw[start_index:end_index]) * 256^(15:0))
+  })
+  
+  first_values <- sapply(numeric_values, function(x) x[1])
+  
+  string_values <- as.character(first_values)
+  
+  string_first_elements <- sapply(string_values, extract_first_character)
+  
+  final_hash <- paste(string_first_elements, collapse = "")
+
+  
+  return(final_hash)
+}
+
+
+order_columns <- function(df, desired_order) {
+  df <- df[, desired_order, drop = FALSE]
+  return(df)
+}
+
+```
+
+### Sitting vs Standing
+
+-   We will add a column to each file for 'Posture' for Sitting vs Standing so we can compare both in one dataset
+
+#### Sitting
+
+```{r}
+
+# List files in the directory 
+file_names <- list.files(path = here('seated'), full.names = TRUE)
+
+# Initialize an empty dataframe for combined data
+combined_df <- data.frame()
+
+# Process each file individually
+for (file_id in seq_along(file_names)) {
+    # Read file
+    temp_df <- read_csv(file_names[file_id])
+    
+    # Extract file size
+    file_size <- sprintf("%04d", file.info(file_names[file_id])$size)
+
+    # Extract sequence number and name from file names
+    matches <- str_extract_all(basename(file_names[file_id]), "\\d+|[a-zA-Z_]+\\b")[[1]]
+    sequence_number <- ifelse(is.na(as.numeric(matches[1])), NA, as.numeric(matches[1]))
+    name <- ifelse(!is.na(as.numeric(matches[1])), NA, matches[1])
+
+    # Create Assessment_ID
+    Assessment_ID <- ifelse(!is.na(name),
+                            paste("expert", gsub("_", " ", name), ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"),
+                            paste("novice", ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"))
+    
+    # Add file info to the dataframe
+    temp_df$file_id <- file_id
+    temp_df$sequence_number <- sequence_number
+    temp_df$name <- name
+    temp_df$file_size <- file_size
+    temp_df$Assessment_ID <- Assessment_ID
+
+    # Bind to the main dataframe
+    combined_df <- rbind(combined_df, temp_df)
+}
+
+seated_df <- combined_df %>% 
+  select(28,1:23) %>% 
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit) %>% 
+  mutate(Posture = 'Seated')
+
+```
+
+```{r}
+colnames(seated_df)
+```
+
+
+#### Standing
+
+```{r}
+
+# List files in the directory 
+file_names <- list.files(path = here('standing'), full.names = TRUE)
+
+# Initialize an empty dataframe for combined data
+combined_df <- data.frame()
+
+# Process each file individually
+for (file_id in seq_along(file_names)) {
+    # Read file
+    temp_df <- read_csv(file_names[file_id])
+    
+    # Extract file size
+    file_size <- sprintf("%04d", file.info(file_names[file_id])$size)
+
+    # Extract sequence number and name from file names
+    matches <- str_extract_all(basename(file_names[file_id]), "\\d+|[a-zA-Z_]+\\b")[[1]]
+    sequence_number <- ifelse(is.na(as.numeric(matches[1])), NA, as.numeric(matches[1]))
+    name <- ifelse(!is.na(as.numeric(matches[1])), NA, matches[1])
+
+    # Create Assessment_ID
+    Assessment_ID <- ifelse(!is.na(name),
+                            paste("expert", gsub("_", " ", name), ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"),
+                            paste("novice", ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"))
+    
+    # Add file info to the dataframe
+    temp_df$file_id <- file_id
+    temp_df$sequence_number <- sequence_number
+    temp_df$name <- name
+    temp_df$file_size <- file_size
+    temp_df$Assessment_ID <- Assessment_ID
+
+    # Bind to the main dataframe
+    combined_df <- rbind(combined_df, temp_df)
+}
+
+standing_df <- combined_df %>% 
+  select(28,1:23) %>% 
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit) %>% 
+  mutate(Posture = 'Standing')
+
+```
+
+```{r}
+colnames(standing_df)
+```
+
+
+### Experts
+
+```{r}
+
+# File cleanup for mismatched columns
+# - LeftSlingPlaced, RightSlingPlaced, StartingPointTouched
+
+df_columns <- colnames(combined_df)
+
+ds_columns <- combined_df %>% 
+  select(-c('sequence_number', 'name', 'file_size', 'file_id')) %>% 
+  arrange(Assessment_ID, TimeStamp)
+
+ds_columns
+
+```
+
+```{r}
+
+Siff_9_18 <- read_csv(here('staging','Siff 9.18.csv'), 
+    col_types = cols(LeftSlingPlaced = col_skip(), 
+        RightSlingPlaced = col_skip())) %>% 
+  mutate(StartingPointTouched = FALSE )
+
+colnames(Siff_9_18)
+
+```
+
+
+```{r}
+
+write_csv(Siff_9_18,here('experts','Siff 9.18.23_formatted.csv'))
+
+```
+
+
+```{r}
+# List files in the directory 
+file_names <- list.files(path = here('experts'), full.names = TRUE)
+
+# Initialize an empty dataframe for combined data
+combined_expert_df <- data.frame()
+
+# Process each file individually
+for (file_id in seq_along(file_names)) {
+    # Read file
+    temp_df <- read_csv(file_names[file_id])
+    # Print logging message
+    cat("Processing file:", file_names[file_id], "\n")
+    
+    # Filter columns to include only those present in df_columns
+    #temp_df <- temp_df[, intersect(colnames(temp_df), df_columns)]
+    
+    # Extract file size
+    file_size <- sprintf("%04d", file.info(file_names[file_id])$size)
+
+    # Extract sequence number and name from file names
+    matches <- str_extract_all(basename(file_names[file_id]), "\\d+|[a-zA-Z_]+\\b")[[1]]
+    sequence_number <- ifelse(is.na(as.numeric(matches[1])), NA, as.numeric(matches[1]))
+    name <- ifelse(!is.na(as.numeric(matches[1])), NA, matches[1])
+    hash_name <- generate_userid_hash(name)
+
+    # Create Assessment_ID
+    Assessment_ID <- ifelse(!is.na(name),
+                            paste("expert", gsub("_", " ", hash_name), ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"),
+                            paste("novice", ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"))
+    
+    # Add file info to the dataframe
+    temp_df$file_id <- file_id
+    temp_df$sequence_number <- sequence_number
+    temp_df$name <- hash_name
+    temp_df$file_size <- file_size
+    temp_df$Assessment_ID <- Assessment_ID
+
+    # Bind to the main dataframe
+    combined_expert_df <- rbind(combined_expert_df, temp_df)
+}
+
+expert_df <- combined_expert_df %>% 
+  select(28,1:23) %>% 
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit) %>% 
+  mutate(Posture = 'Expert') 
+
+```
+
+```{r}
+colnames(expert_df)
+```
+
+### Final Dataset
+
+```{r}
+
+vr_data <- rbind(standing_df, seated_df, expert_df)
+
+```
+
+```{r}
+str(vr_data)
+```
+```{r}
+write_csv(vr_data,here('dataset','vr_sling_ds.csv'))
+```
+

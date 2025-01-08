@@ -1,0 +1,438 @@
+---
+title: "VR Sling Time Series Data Structure"
+execute: 
+  eval: true
+format: 
+  html: 
+    link-external-icon: true
+    link-external-newwindow: true
+    toc: true
+    toc-depth: 5
+    code-fold: true
+    code-summary: "Show the code"
+    embed-resources: true
+    default-image-extension: svg
+    dpi: 600
+    theme: superhero
+---
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+
+library(here)
+library(dplyr)
+library(readr)
+library(DT)
+library(purrr)
+library(tidyr)
+library(jsonlite)
+library(here)
+library(stringr)
+library(ggplot2)
+library(plotly)
+library(reticulate)
+library(aws.signature)
+library(aws.ec2metadata)
+library(reticulate)
+
+```
+
+### Python Environment
+
+```{python cache=TRUE}
+
+import pkg_resources
+installed_packages = [(d.project_name, d.version) for d in pkg_resources.working_set]
+
+print(installed_packages)
+
+```
+### Load Data
+
+#### When in local environment
+
+```{r eval=FALSE}
+vr_sling_ds <- read_csv(here("data","vr_sling_ds.csv"))
+```
+
+#### AWS S3
+
+```{python cache=TRUE, message=FALSE, warning=FALSE}
+
+import awswrangler as wr
+import boto3
+
+s3_path = 's3://vr-sling/Model_Training/expert/vr_sling_ds.csv'
+
+# Read the CSV file into a Pandas DataFrame
+vr_sling_ds = wr.s3.read_csv(path=s3_path)
+
+```
+
+
+```{r warning=FALSE, message=FALSE}
+py$vr_sling_ds %>% str()
+```
+
+
+```{r}
+
+filtered_data <- py$vr_sling_ds %>%
+  filter(str_detect(Assessment_ID, "expert"))
+
+filtered_data %>% 
+  head(5)
+
+```
+
+```{r}
+
+experts <- filtered_data %>% 
+  select(1,2,3,4,5)
+
+experts$Assessment_ID <- as.factor(experts$Assessment_ID)
+
+```
+
+### Y Axis
+
+```{r}
+
+# Plotting
+p1 <- ggplot(experts, aes(x = TimeStamp, y = StylusPositionY, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position Y") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+
+# Convert the ggplot object to a plotly object
+p1_interactive <- ggplotly(p1, tooltip = "text") # Use 'text' aesthetic for the tooltip
+
+# Display the interactive plot
+p1_interactive
+
+```
+
+### X Axis
+
+```{r}
+
+library(ggplot2)
+library(plotly)
+
+# Plotting
+p2 <- ggplot(experts, aes(x = TimeStamp, y = StylusPositionX, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position X") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+# Convert the ggplot object to a plotly object
+p2_interactive <- ggplotly(p2, tooltip = "text") # Use 'text' aesthetic for the tooltip
+
+# Display the interactive plot
+p2_interactive
+
+```
+
+### Z Axis
+
+```{r}
+
+library(ggplot2)
+
+# Plotting
+p3 <- ggplot(experts, aes(x = TimeStamp, y = StylusPositionZ, color = Assessment_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title = "Time Series of Stylus Positions",
+       x = "Timestamp",
+       y = "Stylus Position Z") +
+  scale_color_viridis_d() +
+  theme(legend.position = "right")
+
+# Convert the ggplot object to a plotly object
+p3_interactive <- ggplotly(p3, tooltip = "text") # Use 'text' aesthetic for the tooltip
+
+# Display the interactive plot
+p3_interactive
+
+```
+
+### Expert Dataset
+
+```{r}
+
+filtered_experts <- experts %>%
+  filter(Assessment_ID %in% c("expert_trial_16_978575", "expert_trial_16_657889", "expert_trial_15_737028"))
+
+filtered_experts %>% 
+  head(10)
+
+```
+
+
+```{r}
+
+filtered_expert <- experts %>%
+  filter(Assessment_ID %in% c("expert_trial_16_978575"))
+
+
+# For python jupyter notebook later
+#write_csv(filtered_expert, here('expert_run.csv'))
+
+
+```
+
+### Dynamic Time Warping (DTW) Calculations
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+
+
+# Pivot the data
+df_pivoted <- filtered_data %>%
+  group_by(Assessment_ID) %>%
+  summarise(posX_list = list(StylusPositionX),
+            posY_list = list(StylusPositionY),
+            posZ_list = list(StylusPositionZ))
+
+```
+
+```{python}
+
+import pandas as pd
+import numpy as np
+from dtaidistance import dtw_ndim
+
+s1 = np.array([[0, 0],
+               [0, 1],
+               [2, 1],
+               [0, 1],
+               [0, 0]], dtype=np.double)
+               
+s2 = np.array([[0, 0],
+               [2, 1],
+               [0, 1],
+               [0, .5],
+               [0, 0]], dtype=np.double)
+               
+d = dtw_ndim.distance(s1, s2, use_c=True)
+
+print(d)
+
+```
+
+
+```{python}
+# testing R to python conversions
+
+import pandas as pd
+import numpy as np
+from dtaidistance import dtw_ndim
+
+
+# Bring from R
+s1_x = r.df_pivoted['posX_list'][0]
+s2_x = r.df_pivoted['posX_list'][1]
+s1_y = r.df_pivoted['posY_list'][0]
+s2_y = r.df_pivoted['posY_list'][1]
+
+
+# Combine X and Y into multidimensional arrays
+series_xy1 = np.column_stack((s1_x, s1_y)).astype(np.double)
+series_xy2 = np.column_stack((s2_x, s2_y)).astype(np.double)
+
+d_test = dtw_ndim.distance(series_xy1, series_xy2, use_c=True)
+
+print(d_test)
+
+```
+
+
+```{python}
+
+# Bring R dataframe in
+df_pivoted = r.df_pivoted
+
+```
+
+#### X with Respect to Y
+
+```{python cache=TRUE}
+
+import pandas as pd
+import numpy as np
+from dtaidistance import dtw
+
+def calculate_dtw_distances_xy(df_pivoted):
+    num_rows = len(df_pivoted)
+    
+    assessment_ids = df_pivoted['Assessment_ID'].values
+    num_assessments = len(assessment_ids)
+    
+    # Initialize the DTW distance matrix with zeros
+    dtw_distance_matrix_xy = pd.DataFrame(np.zeros((num_assessments, num_assessments)),
+                                   index=assessment_ids, columns=assessment_ids)
+    
+    for i in range(0, num_rows - 1):
+        for j in range(i + 1, num_rows):
+            # Extract position lists for pairs of assessments
+            s1_x, s2_x = df_pivoted['posX_list'].iloc[i], df_pivoted['posX_list'].iloc[j]
+            s1_y, s2_y = df_pivoted['posY_list'].iloc[i], df_pivoted['posY_list'].iloc[j]
+            
+            # Combine X and Y into multidimensional arrays
+            series_xy1 = np.column_stack((s1_x, s1_y)).astype(np.double)
+            series_xy2 = np.column_stack((s2_x, s2_y)).astype(np.double)
+
+            distance = dtw_ndim.distance(series_xy1, series_xy2, use_c=True)
+            
+            # Update the matrix with the DTW distance for X relative to Y
+            dtw_distance_matrix_xy.iloc[i, j] = dtw_distance_matrix_xy.iloc[j, i] = distance
+
+            print(f"DTW distance between {i} and {j} for X relative to Y: {distance}")
+    
+    return dtw_distance_matrix_xy
+            
+```
+
+
+```{python cache=TRUE}
+
+import pandas as pd
+import numpy as np
+
+distance_matrix_xy = calculate_dtw_distances_xy(df_pivoted)
+
+```
+
+#### Z with Respect to Y
+
+```{python cache=TRUE}
+
+import pandas as pd
+import numpy as np
+from dtaidistance import dtw
+
+def calculate_dtw_distances_zy(df_pivoted):
+    num_rows = len(df_pivoted)
+    
+    assessment_ids = df_pivoted['Assessment_ID'].values
+    num_assessments = len(assessment_ids)
+    
+    # Initialize the DTW distance matrix with zeros
+    dtw_distance_matrix_zy = pd.DataFrame(np.zeros((num_assessments, num_assessments)),
+                                   index=assessment_ids, columns=assessment_ids)
+    
+    for i in range(0, num_rows - 1):
+        for j in range(i + 1, num_rows):
+            # Extract position lists for pairs of assessments
+            s1_z, s2_z = df_pivoted['posZ_list'].iloc[i], df_pivoted['posZ_list'].iloc[j]
+            s1_y, s2_y = df_pivoted['posY_list'].iloc[i], df_pivoted['posY_list'].iloc[j]
+            
+            # Combine Z and Y into multidimensional arrays
+            series_zy1 = np.column_stack((s1_z, s1_y)).astype(np.double)
+            series_zy2 = np.column_stack((s2_z, s2_y)).astype(np.double)
+
+            distance = dtw_ndim.distance(series_zy1, series_zy2, use_c=True)
+            
+            # Update the matrix with the DTW distance for Z relative to Y
+            dtw_distance_matrix_zy.iloc[i, j] = dtw_distance_matrix_zy.iloc[j, i] = distance
+
+            print(f"DTW distance between {i} and {j} for Z relative to Y: {distance}")
+    
+    return dtw_distance_matrix_zy
+
+```
+
+```{python cache=TRUE}
+
+import pandas as pd
+import numpy as np
+
+distance_matrix_zy = calculate_dtw_distances_zy(df_pivoted)
+
+```
+
+### Save XY Distance Matrix to AWS S3
+
+```{python eval=FALSE, cache=TRUE}
+
+import pandas as pd
+import boto3
+
+# Initialize a boto3 client
+s3 = boto3.client('s3')
+
+# Convert to parquet
+distance_matrix_xy.to_parquet('distance_matrix_xy.parquet')
+
+# Upload the file
+s3.upload_file('distance_matrix_xy.parquet', 'vr-sling', 'distance_matrix/XY/distance_matrix.parquet')
+
+
+```
+
+### Save ZY Distance Matrix to AWS S3
+
+```{python eval=FALSE, cache=TRUE}
+
+import pandas as pd
+import boto3
+
+s3 = boto3.client('s3')
+
+# Convert to parquet
+distance_matrix_zy.to_parquet('distance_matrix_zy.parquet')
+
+# Upload the file
+s3.upload_file('distance_matrix_zy.parquet', 'vr-sling', 'distance_matrix/ZY/distance_matrix.parquet')
+
+```
+
+
+```{python cache=TRUE}
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def plot_dtw_distance_matrix(dtw_distance_matrix):
+    # Transform index and columns to keep only the last four characters
+    dtw_distance_matrix.index = dtw_distance_matrix.index.map(lambda x: x[-4:])
+    dtw_distance_matrix.columns = dtw_distance_matrix.columns.map(lambda x: x[-4:])
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(dtw_distance_matrix, annot=True, fmt=".1f", cmap='coolwarm', square=True, cbar_kws={'shrink': .5})
+    plt.title('DTW Distance Matrix Heatmap')
+    plt.xlabel('Assessment ID')
+    plt.ylabel('Assessment ID')
+    plt.show()
+
+
+```
+
+### X with Respect to Y Heat Map
+
+```{python cache=TRUE}
+
+plot_dtw_distance_matrix(distance_matrix_xy)
+
+```
+
+### Z with Respect to Y Heat Map
+
+```{python cache=TRUE}
+
+plot_dtw_distance_matrix(distance_matrix_zy)
+
+
+```
+

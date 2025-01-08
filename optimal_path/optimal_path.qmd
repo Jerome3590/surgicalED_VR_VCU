@@ -1,0 +1,373 @@
+---
+title: "VR Sling Optimal Path Analysis"
+execute: 
+  eval: true
+format: 
+  html: 
+    link-external-icon: true
+    link-external-newwindow: true
+    toc: true
+    toc-depth: 5
+    code-fold: true
+    code-summary: "Show the code"
+    embed-resources: true
+    default-image-extension: svg
+    dpi: 600
+    theme: superhero
+---
+
+```{r message=FALSE, warning=FALSE, cache=TRUE}
+
+library(here)
+library(dplyr)
+library(readr)
+library(DT)
+library(purrr)
+library(tidyr)
+library(jsonlite)
+library(here)
+library(stringr)
+library(ggplot2)
+library(plotly)
+library(reticulate)
+library(aws.signature)
+library(aws.ec2metadata)
+library(reticulate)
+
+```
+### Python Environment
+
+```{python}
+
+import pkg_resources
+import json
+
+# installed packages
+installed_packages = [(d.project_name, d.version) for d in pkg_resources.working_set]
+
+# Helper function to chunk the list
+def chunk_list(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+# Chunk the list into sublists of 4 elements each
+chunked_packages = list(chunk_list(installed_packages, 4))
+
+# Convert each chunk into a JSON string and collect them into a list
+json_chunks = [json.dumps(chunk) for chunk in chunked_packages]
+
+# Join all chunks with a line break to ensure each chunk is on a new line
+final_json_output = "\n".join(json_chunks)
+
+# Print final JSON output
+print(final_json_output)
+
+```
+
+### Machine Learning Optimal Path Algorithms 
+
+![Optimal Path Machine Learning Algorithms](optimal_path_algorithms.png)
+
+- Selecting Soft Dynamic Time Warping K-Means Clustering
+
+### Load Data
+
+```{python}
+
+import numpy as np
+import pandas as pd
+
+# Load data
+experts_ts = pd.read_csv('experts.csv')
+
+# Group by 'Assessment_ID' to separate the time series
+grouped = experts_ts.groupby('Assessment_ID')
+
+# Initialize an empty list to collect the time series arrays
+time_series_data = []
+
+# Determine the maximum size of any time series
+max_sz = grouped.size().max()
+
+# Loop over each group, extract the position columns, and pad if necessary
+for name, group in grouped:
+    # Extract the position data
+    positions = group[['StylusPositionX', 'StylusPositionY', 'StylusPositionZ']].values
+
+    # Check if padding is needed
+    if len(positions) < max_sz:
+        # Pad the array to ensure all time series are of the same length
+        padding = np.zeros((max_sz - len(positions), 3))
+        positions = np.vstack([positions, padding])
+
+    # Add the positions array to the list
+    time_series_data.append(positions)
+
+# Convert the list of arrays into a 3D numpy array
+time_series_array = np.array(time_series_data)
+
+# `time_series_array` is a 3D numpy array with shape (n_ts, max_sz, d)
+print(time_series_array.shape)
+
+```
+
+### Original Clusters
+
+```{python}
+
+# Calculate the size of each group
+lengths = grouped.size()
+
+# You can view the lengths to get an idea of the distribution
+print(lengths)
+
+```
+
+![Orignal Clusters](dtw_distance_matrix_xyz_heatmap.png)
+
+### Filtered Clusters by Max Minimum Distance (High Similarity)
+
+```{python}
+
+import pandas as pd
+
+# Load data
+experts_ts = pd.read_csv('experts.csv')
+
+# Group by 'Assessment_ID'
+grouped = experts_ts.groupby('Assessment_ID')
+
+# Calculate the size of each group
+lengths = grouped.size()
+
+# Filter groups with size less than 7000
+filtered_group_ids = lengths[lengths < 7000].index.tolist()
+
+# Filter the original DataFrame
+filtered_data = experts_ts[experts_ts['Assessment_ID'].isin(filtered_group_ids)]
+
+```
+
+```{python}
+
+# Group by 'Assessment_ID' to separate the time series
+grouped = filtered_data.groupby('Assessment_ID')
+
+# Initialize an empty list to collect the time series arrays
+time_series_data = []
+
+# Determine the maximum size of any time series
+max_sz = grouped.size().max()
+
+# Loop over each group, extract the position columns, and pad if necessary
+for name, group in grouped:
+    # Extract the position data
+    positions = group[['StylusPositionX', 'StylusPositionY', 'StylusPositionZ']].values
+
+    # Check if padding is needed
+    if len(positions) < max_sz:
+        # Pad the array to ensure all time series are of the same length
+        padding = np.zeros((max_sz - len(positions), 3))
+        positions = np.vstack([positions, padding])
+
+    # Add the positions array to the list
+    time_series_data.append(positions)
+
+# Convert the list of arrays into a 3D numpy array
+time_series_array = np.array(time_series_data)
+
+# Now `time_series_array` is a 3D numpy array with shape (n_ts, max_sz, d)
+print(time_series_array.shape)
+
+```
+
+### Find Optimal Path for Each High Similar Cluster
+
+```{python eval=FALSE}
+
+from tslearn.clustering import TimeSeriesKMeans
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
+
+scaler = TimeSeriesScalerMeanVariance()
+time_series_scaled = scaler.fit_transform(time_series_array)
+
+# Define the number of clusters
+n_clusters = 4
+
+# Perform clustering
+model = TimeSeriesKMeans(n_clusters=n_clusters, metric="softdtw",
+                         max_iter=25, random_state=1997,
+                         verbose=True, n_jobs=-1,
+                         metric_params={"gamma": 1})
+                           
+labels = model.fit_predict(time_series_scaled)
+
+# Each cluster's center is the optimal path for that cluster
+optimal_paths = model.cluster_centers_
+
+```
+
+### Optimal Paths
+
+```{python eval=FALSE}
+
+import h5py
+
+# Save optimal paths using HDF5
+with h5py.File('optimal_paths.hdf5', 'w') as f:
+    for i, path in enumerate(optimal_paths):
+        f.create_dataset(f'cluster_{i}', data=path)
+        
+```
+
+```{python}
+
+import h5py
+import numpy as np
+
+optimal_paths = []
+with h5py.File('optimal_paths.hdf5', 'r') as f:
+    for key in f.keys():
+        optimal_paths.append(np.array(f[key]))
+
+        
+```
+
+```{python}
+
+# Visualization or further analysis
+import matplotlib.pyplot as plt
+
+# Colors for each cluster (expand for more clusters)
+colors = ['red', 'blue', 'green', 'orange', 'purple']
+
+for i, series in enumerate(optimal_paths):
+    plt.plot(series.ravel(), color=colors[i % len(colors)], label=f'Cluster {i+1} Path')
+plt.title("Optimal Path for Each Cluster")
+plt.legend()
+plt.show()
+
+```
+
+```{python}
+
+import plotly.graph_objects as go
+import numpy as np
+from scipy.interpolate import interp1d
+
+# Function to interpolate and smooth a path
+def smooth_path(path, num_points=100):
+    if len(path) < 2:
+        return path
+    # Define the existing points on the path
+    t_current = np.linspace(0, 1, num=path.shape[0])
+    t_new = np.linspace(0, 1, num=num_points)
+    
+    # Create interpolation functions for each dimension
+    x_interp = interp1d(t_current, path[:, 0], kind='cubic')
+    y_interp = interp1d(t_current, path[:, 1], kind='cubic')
+    z_interp = interp1d(t_current, path[:, 2], kind='cubic')
+    
+    # Generate the new smoother path
+    smooth_x = x_interp(t_new)
+    smooth_y = y_interp(t_new)
+    smooth_z = z_interp(t_new)
+    
+    return np.vstack((smooth_x, smooth_y, smooth_z)).T
+
+# Plot configuration
+fig = go.Figure()
+
+# Add interpolated and smoothed traces for each cluster
+for idx, path in enumerate(optimal_paths):
+    smoothed_path = smooth_path(path)
+    fig.add_trace(
+        go.Scatter3d(
+            x=smoothed_path[:, 0],  # Smoothed X coordinates
+            y=smoothed_path[:, 1],  # Smoothed Y coordinates
+            z=smoothed_path[:, 2],  # Smoothed Z coordinates
+            mode='lines',
+            line=dict(width=4, color=colors[idx % len(colors)]),
+            name=f'Cluster {idx+1}'
+        )
+    )
+
+# Update layout with dropdown to toggle clusters
+fig.update_layout(
+    title='3D Visualization of Smoothed Optimal Paths',
+    scene=dict(
+        xaxis_title='X',
+        yaxis_title='Y',
+        zaxis_title='Z'
+    ),
+    updatemenus=[
+        dict(
+            buttons=[dict(label=f'Cluster {i+1}',
+                          method='update',
+                          args=[{'visible': [j==i for j in range(len(optimal_paths))]},
+                                {'title': f'Visualization of Cluster {i+1}'}]) for i in range(len(optimal_paths))],
+            direction='down',
+            pad={'r': 10, 't': 10},
+            showactive=True,
+            x=0.1,
+            xanchor='left',
+            y=1.15,
+            yanchor='top'
+        )
+    ]
+)
+
+
+```
+
+### Save Data to AWS Timestream for Grafana Dashboards/Data Visualization
+
+```{python eval=FALSE}
+
+import boto3
+
+def write_optimal_paths_to_timestream(optimal_paths, database_name, table_name):
+    client = boto3.client('timestream-write', region_name='us-east-1')  # specify your region
+
+    for cluster_index, path in enumerate(optimal_paths):
+        records = []
+        for time_step, data_point in enumerate(path):
+            # Create a separate record for each dimension (x, y, z)
+            dimensions = [{'Name': 'cluster_id', 'Value': str(cluster_index)}]
+            base_record = {
+                'Dimensions': dimensions,
+                'Time': str(time_step), 
+                'TimeUnit': 'MILLISECONDS'  # Adjust time unit as necessary
+            }
+            # Add each coordinate as a separate measure
+            xyz_records = [
+                {**base_record, 'MeasureName': 'x', 'MeasureValue': str(data_point[0]), 'MeasureValueType': 'DOUBLE'},
+                {**base_record, 'MeasureName': 'y', 'MeasureValue': str(data_point[1]), 'MeasureValueType': 'DOUBLE'},
+                {**base_record, 'MeasureName': 'z', 'MeasureValue': str(data_point[2]), 'MeasureValueType': 'DOUBLE'}
+            ]
+            records.extend(xyz_records)
+            
+            # Timestream has a limit on batch size; adjust batch size according to your use case
+            if len(records) >= 100:
+                client.write_records(DatabaseName=database_name, TableName=table_name, Records=records)
+                records = []
+
+        # Write any remaining records
+        if records:
+            client.write_records(DatabaseName=database_name, TableName=table_name, Records=records)
+
+
+# Example usage
+database_name = 'VR_Sling'
+table_name = 'Optimal_Path'
+
+write_optimal_paths_to_timestream(optimal_paths, database_name, table_name)
+
+```
+### Save Data to AWS QuickSight for additional Dashboards/Data Visualization
+
+```{python eval=FALSE}
+
+```
+

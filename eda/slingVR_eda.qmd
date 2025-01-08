@@ -1,0 +1,143 @@
+---
+title: "SlingVR Data Visualization"
+author: "Jerome Dixon"
+format: html
+editor: visual
+---
+
+```{r}
+library(here)
+library(dplyr)
+library(readr)
+library(jsonlite)
+library(plotly)
+```
+
+### VR Sling Data
+
+```{r}
+X001_test <- read_csv(here("test","Siff 10.3.23.csv"))
+```
+
+```{r}
+
+X001_test %>% 
+  str()
+
+```
+
+### VR Sling Data Modifications
+
+```{r}
+
+vr_sling <- X001_test %>%
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit)
+
+vr_sling
+
+```
+
+### VR Sling Final Schema
+
+```{r}
+
+schema <- sapply(vr_sling, class)
+
+# Convert schema to data frame
+df_schema <- data.frame(
+  Column = names(schema),
+  Class = unname(schema),
+  stringsAsFactors = FALSE
+)
+
+# Print data frame schema
+print(df_schema)
+
+
+```
+
+```{r}
+library(jsonlite)
+
+# Convert schema to JSON
+json_schema <- toJSON(df_schema)
+
+# Print JSON schema
+print(json_schema)
+
+```
+
+```{r}
+
+write_csv(df_schema, here("schema","schema.csv"))
+write_json(json_schema, here("schema","schema.json"))
+
+```
+
+### Stylus Position
+
+```{r}
+
+library(plotly)
+
+
+vr_sling$Collided <- as.factor(vr_sling$Collided)
+
+fig <- plot_ly(vr_sling, x = ~StylusPositionX, y = ~StylusPositionY, z = ~StylusPositionZ, type = 'scatter3d', mode = 'lines',
+        opacity = 1, line = list(width = 6, color = ~Collided, reverscale = FALSE))
+
+fig
+
+
+```
+
+### Stylus Rotation
+
+```{r}
+
+library(plotly)
+
+
+vr_sling$Collided <- as.factor(vr_sling$Collided)
+
+fig <- plot_ly(vr_sling, x = ~StylusRotationX, y = ~StylusRotationY, z = ~StylusRotationZ, type = 'scatter3d', mode = 'lines',
+        opacity = 1, line = list(width = 6, color = ~Collided, reverscale = FALSE))
+
+fig
+
+```
+
+### Head Position
+
+```{r}
+
+library(plotly)
+
+
+vr_sling$Collided <- as.factor(vr_sling$Collided)
+
+fig <- plot_ly(vr_sling, x = ~HeadPositionX, y = ~HeadPositionY, z = ~HeadPositionZ, type = 'scatter3d', mode = 'lines',
+        opacity = 1, line = list(width = 6, color = ~Collided, reverscale = FALSE))
+
+fig
+
+
+```
+
+### Head Rotation
+
+```{r}
+library(plotly)
+
+
+vr_sling$Collided <- as.factor(vr_sling$Collided)
+
+fig <- plot_ly(vr_sling, x = ~HeadRotationX, y = ~HeadRotationY, z = ~HeadRotationZ, type = 'scatter3d', mode = 'lines',
+        opacity = 1, line = list(width = 6, color = ~Collided, reverscale = FALSE))
+
+fig
+```
+
+```{r}
+
+```

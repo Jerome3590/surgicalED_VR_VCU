@@ -1,0 +1,167 @@
+---
+title: "Seated Stylus"
+format:
+  html:
+    html-math-method: katex
+    df-print: paged
+    embed-resources: true
+    fontsize: "11pt"
+    smooth-scroll: true
+editor_options: 
+  chunk_output_type: inline
+execute:
+  echo: false
+  message: false
+  warning: false
+  eval: true
+---
+
+```{r}
+
+library(here)
+library(dplyr)
+library(readr)
+library(jsonlite)
+library(plotly)
+library(stringr)
+library(reticulate)
+
+```
+
+```{r eval=FALSE}
+
+reticulate::install_python(version = '3.11.7')
+
+py_install(c('plotly','matplotlib', 'shap','catboost'))
+
+```
+
+[Home](https://plotly-demo.s3.amazonaws.com/slingVR_eda2.html)
+
+```{r}
+
+# List files in the directory 
+file_names <- list.files(path = here('seated'), full.names = TRUE)
+
+# Initialize an empty dataframe for combined data
+combined_df <- data.frame()
+
+# Process each file individually
+for (file_id in seq_along(file_names)) {
+    # Read file
+    temp_df <- read_csv(file_names[file_id])
+    
+    # Extract file size
+    file_size <- file.info(file_names[file_id])$size
+    
+    # Extract sequence number and name from file names
+    matches <- str_extract_all(basename(file_names[file_id]), "\\d+|[a-zA-Z_]+\\b")[[1]]
+    sequence_number <- ifelse(is.na(as.numeric(matches[1])), NA, as.numeric(matches[1]))
+    name <- ifelse(!is.na(as.numeric(matches[1])), NA, matches[1])
+
+    # Create Assessment_ID
+    Assessment_ID <- ifelse(!is.na(name),
+                            paste("Expert", gsub("_", " ", name), ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"),
+                            paste("User", ifelse(is.na(sequence_number), file_id, sequence_number), file_size, sep = "_"))
+    
+    # Add file info to the dataframe
+    temp_df$file_id <- file_id
+    temp_df$sequence_number <- sequence_number
+    temp_df$name <- name
+    temp_df$file_size <- file_size
+    temp_df$Assessment_ID <- Assessment_ID
+
+    # Bind to the main dataframe
+    combined_df <- rbind(combined_df, temp_df)
+}
+
+training_df <- combined_df %>% 
+  select(28,1:23) %>% 
+  mutate(Collided = PelvisCollided | BladderCollided | VesselsCollided | LeftDotHit | RightDotHit)
+
+
+```
+
+```{python}
+
+import plotly.graph_objects as go
+import pandas as pd
+
+train_df = r.training_df
+
+# Function to create traces for all Assessment_IDs
+def create_traces_for_all_assessments(df):
+    traces = []
+    for aid in df['Assessment_ID'].unique():
+        filtered_df = df[df['Assessment_ID'] == aid]
+        
+        no_collisions_trace = go.Scatter3d(
+            x=filtered_df[filtered_df['Collided'] == False]['StylusPositionX'],
+            y=filtered_df[filtered_df['Collided'] == False]['StylusPositionY'],
+            z=filtered_df[filtered_df['Collided'] == False]['StylusPositionZ'],
+            mode='markers',
+            marker=dict(size=2),
+            name=f'No Collisions ({aid})',
+            visible=False  # Initially hidden
+        )
+
+        collisions_trace = go.Scatter3d(
+            x=filtered_df[filtered_df['Collided'] == True]['StylusPositionX'],
+            y=filtered_df[filtered_df['Collided'] == True]['StylusPositionY'],
+            z=filtered_df[filtered_df['Collided'] == True]['StylusPositionZ'],
+            mode='markers',
+            marker=dict(size=2, color='red'),
+            name=f'Collisions ({aid})',
+            visible=False  # Initially hidden
+        )
+        
+        traces.extend([no_collisions_trace, collisions_trace])
+    
+    # Make the first set of traces visible
+    traces[0].visible = True
+    traces[1].visible = True
+
+    return traces
+
+# Create traces for all Assessment_IDs
+all_traces = create_traces_for_all_assessments(train_df)
+
+# Create dropdown buttons for each Assessment_ID
+buttons = []
+for i, aid in enumerate(train_df['Assessment_ID'].unique()):
+    # Each button shows/hides two traces (collisions and no collisions)
+    button = dict(
+        label=str(aid),
+        method='update',
+        args=[{'visible': [i * 2 == j or i * 2 + 1 == j for j in range(len(all_traces))]},
+              {'title': ''}]
+    )
+    buttons.append(button)
+
+# Define the layout with dropdown menus
+layout = go.Layout(
+    updatemenus=[dict(
+        active=0,
+        buttons=buttons,
+        x=0.1,
+        xanchor='left',
+        y=1.1,
+        yanchor='top'
+    )],
+    margin=dict(l=0, r=0, b=0, t=0),
+    scene=dict(
+        xaxis_title='Stylus Position X',
+        yaxis_title='Stylus Position Y',
+        zaxis_title='Stylus Position Z'
+    ),
+    title=''
+)
+
+# Create the figure with all traces
+fig = go.Figure(data=all_traces, layout=layout)
+
+# Show the figure
+fig.show()
+
+
+```
