@@ -27,13 +27,13 @@ Below is initial exploratory data analysis for a to be determined final solution
 
 ## Project Structure
 .
-├── eda/
-│ 
-├── cluster_analysis/
-│ 
-└── optimal_path/
-|
-└── data_viz/
+├── eda/  
+│   
+├── cluster_analysis/  
+│   
+└── optimal_path/  
+|  
+└── data_viz/  
 
 ## Time Series Clustering Analysis
 [**Time_Series.html**](https://plotly-demo.s3.us-east-1.amazonaws.com/time_series.html)
