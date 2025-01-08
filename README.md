@@ -16,7 +16,7 @@ Below is initial exploratory data analysis for a to be determined final solution
 
 **Data Processing Pipeline**
 - Automated data ingestion from VR devices
-- Real-time data normalization and preprocessing
+- Near real-time data normalization and preprocessing
 - Expert path modeling using advanced clustering algorithms
 - Deviation analysis from optimal performance paths
 
