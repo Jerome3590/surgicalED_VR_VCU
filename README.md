@@ -1,9 +1,8 @@
 # **SlingED VR Exploratory Data Analysis (EDA)**
 
-SlingED VR is a data analysis and visualization platform for tracking and optimizing user surgical performance.
-A comprehensive solution that will leverage AWS cloud infrastructure to collect, analyze, and visualize VR user trial data near real-time. 
-The system will determine optimal performance paths and provides instant feedback through dynamic visualization.
-Below is initial exploratory data analysis for a to be determined final solution.
+SlingED VR is a data analysis platform for tracking user surgical performance.
+A comprehensive solution that will leverage AWS cloud infrastructure to analyze user trial data. near real-time.  
+Below is initial exploratory data analysis for a to be determined final solution.  
 
 ## Architecture
 
@@ -15,15 +14,11 @@ Below is initial exploratory data analysis for a to be determined final solution
 ## Features
 
 **Data Processing Pipeline**
-- Automated data ingestion from VR devices
-- Near real-time data normalization and preprocessing
-- Expert path modeling using advanced clustering algorithms
-- Deviation analysis from optimal performance paths
+- Data ingestion from VR devices
 
 **Visualization Suite**
 - Interactive time series analysis
 - Cluster visualization interface
-- Optimal path mapping with color-coded deviation tracking
 
 ## Project Structure
 .  
