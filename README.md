@@ -8,7 +8,8 @@ Below is initial exploratory data analysis for a to be determined final solution
 
 **Initial Cloud Infrastructure**
 - Primary Storage: AWS S3 Data Lake
-- Real-time Database: Amazon DynamoDB
+- Near Real-time Database: Amazon DynamoDB
+- Compute: AWS EC2  
 - Client Integration: AWS C++ SDK
 
 ## Features
