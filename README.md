@@ -22,7 +22,8 @@ Below is initial exploratory data analysis for a to be determined final solution
 
 ## Project Structure
 .  
-├── eda/  **(exploratory data analysis scripts)**    
+├── eda/  **(exploratory data analysis scripts)** 
+├── eda/student_survey/ **(student survey results)**
 ├── cluster_analysis/  **(cluster analysis scripts)**    
 ├── optimal_path/  **(optimal path scripts)**    
 └── data_viz/  **(various data visualizations)**    
