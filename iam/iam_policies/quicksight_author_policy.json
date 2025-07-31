@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "quicksight:CreateDashboard",
+        "quicksight:DescribeDashboard",
+        "quicksight:UpdateDashboard",
+        "quicksight:ListDashboards",
+        "quicksight:CreateDataSet",
+        "quicksight:PassDataSet",
+        "quicksight:CreateIngestion",
+        "quicksight:DescribeDataSet"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:ListBucket",
+        "athena:*",
+        "glue:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

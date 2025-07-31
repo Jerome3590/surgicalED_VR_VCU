@@ -6,3 +6,7 @@
 .vs/*
 .vscode/*
 *.env
+
+*.pdf
+
+*.xlsx
